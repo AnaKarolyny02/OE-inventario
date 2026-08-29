@@ -66,8 +66,10 @@ select.inp{cursor:pointer;appearance:none}
 .qty-ctrl{display:flex;align-items:center;gap:.4rem;margin-left:auto}
 .qty-btn{width:36px;height:36px;background:var(--ch);border:1px solid var(--br);border-radius:8px;font-size:1.1rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--gn)}
 .qty-btn:hover{background:var(--gn);color:#fff}
-.qty-val{width:56px;text-align:center;font-size:1.05rem;font-weight:800;font-family:'Consolas',monospace;background:var(--bg);border:2px solid var(--br);border-radius:8px;color:var(--tx);outline:none;padding:.3rem}
-.qty-val:focus{border-color:var(--gn)}
+.qty-val{width:80px;text-align:center;font-size:1.15rem;font-weight:800;font-family:'Consolas',monospace;background:var(--bg);border:2px solid var(--br);border-radius:8px;color:var(--tx);outline:none;padding:.4rem}
+.qty-val:focus{border-color:var(--gn);background:rgba(22,163,74,.04)}
+.qty-val::-webkit-inner-spin-button,.qty-val::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.qty-val[type=number]{-moz-appearance:textfield}
 .action-row{display:flex;gap:.4rem}
 .btn-confirm{flex:1;padding:.78rem;background:var(--gn);color:#fff;border:none;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer}
 .btn-confirm:hover{background:var(--gd)}
@@ -203,7 +205,7 @@ select.inp{cursor:pointer;appearance:none}
   </div>
   <div class="modo-tabs">
     <button class="modo-tab active" id="tabEntrada" onclick="setTab('entrada')">&#10133; Entrada</button>
-    <button class="modo-tab" id="tabLista" onclick="setTab('lista')">&#128203; Itens c/ Controle</button>
+    <button class="modo-tab" id="tabLista" onclick="setTab('lista')">&#128203; Lista de Itens</button>
   </div>
   <div id="abaEntrada" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
     <div class="entry-area">
@@ -217,11 +219,9 @@ select.inp{cursor:pointer;appearance:none}
       </div>
       <div class="qty-row">
         <span class="qty-lbl">Quantidade contada</span>
-        <div class="qty-ctrl">
-          <button class="qty-btn" onclick="adjQty(-1)">&#8722;</button>
-          <input class="qty-val" id="qtyVal" type="number" min="1" value="1">
-          <button class="qty-btn" onclick="adjQty(1)">+</button>
-        </div>
+        <input class="qty-val" id="qtyVal" type="number" min="1" value="1"
+          inputmode="numeric" autocomplete="off"
+          style="margin-left:auto;width:110px;font-size:1.25rem;padding:.45rem .6rem">
       </div>
       <div class="action-row">
         <button class="btn-confirm" id="btnConfirm" onclick="confirmar()" disabled>&#10003; Confirmar</button>
@@ -283,7 +283,7 @@ var pendCod='',pendItem=null,pendKey='';
 var camStream=null,camTimer=null,camDetector=null;
 var camOk=('BarcodeDetector' in window);
 
-// ── Tema ─────────────────────────────────────────────────────
+// -- Tema -----------------------------------------------------
 function toggleTheme(){
   var h=document.documentElement,d=h.hasAttribute('data-dark');
   if(d){h.removeAttribute('data-dark');localStorage.setItem('oe-theme','light');}
@@ -299,7 +299,7 @@ if(localStorage.getItem('oe-theme')==='dark'){
   window.addEventListener('load',atualizarIconeTema);
 }
 
-// ── Firebase ─────────────────────────────────────────────────
+// -- Firebase -------------------------------------------------
 async function fbReq(m,p,d){
   try{var o={method:m,headers:{'Content-Type':'application/json'}};
     if(d!==undefined)o.body=JSON.stringify(d);
@@ -313,14 +313,14 @@ function fbPo(p,d){return fbReq('POST',p,d);}
 function encN(n){return n.replace(/[.#$[\]]/g,'_').replace(/\s+/g,'_');}
 function grupoRua(local){return (local||'').split(' ')[0]||local;}
 
-// ── Beep ─────────────────────────────────────────────────────
+// -- Beep -----------------------------------------------------
 function beep(f,d,v){
   try{var c=new(window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();
     o.connect(g);g.connect(c.destination);o.frequency.value=f||1100;g.gain.value=v||0.18;
     o.start();o.stop(c.currentTime+(d||100)/1000);setTimeout(function(){c.close();},200);}catch(e){}
 }
 
-// ── Persistência ─────────────────────────────────────────────
+// -- Persistencia ---------------------------------------------
 function salvarEstado(){
   try{localStorage.setItem('oe-sep',JSON.stringify({nome:nome,localSel:localSel,sid:sid,bips:bips,naoPrevistos:naoPrevistos,totB:totB,ts:Date.now()}));}catch(e){}
 }
@@ -348,7 +348,7 @@ async function tentarRestaurar(){
   }catch(e){limparEstado();return false;}
 }
 
-// ── Entry ─────────────────────────────────────────────────────
+// -- Entry -----------------------------------------------------
 document.getElementById('inNome').addEventListener('input',chkEntry);
 function chkEntry(){
   var n=document.getElementById('inNome').value.trim();
@@ -451,7 +451,7 @@ async function aguardar(){
   wT=setTimeout(aguardar,3000);
 }
 
-// ── Scan screen ───────────────────────────────────────────────
+// -- Scan screen -----------------------------------------------
 function abrirScan(){
   document.getElementById('wait').style.display='none';
   document.getElementById('scan').style.display='flex';
@@ -471,7 +471,7 @@ function setTab(t){
   else renderLista();
 }
 
-// ── buscarCodigo: suporta múltiplos controles ─────────────────
+// -- buscarCodigo: suporta multiplos controles -----------------
 document.addEventListener('DOMContentLoaded',function(){
   var inp=document.getElementById('codeInp');
   inp.addEventListener('keydown',function(e){
@@ -481,6 +481,8 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('qtyVal').addEventListener('keydown',function(e){
     if(e.key==='Enter'){e.preventDefault();if(!document.getElementById('btnConfirm').disabled)confirmar();}
   });
+  document.getElementById('qtyVal').addEventListener('focus',function(){this.select();});
+  document.getElementById('qtyVal').addEventListener('click',function(){this.select();});
   document.getElementById('npDesc').addEventListener('keydown',function(e){
     if(e.key==='Enter'){e.preventDefault();confirmarNaoPrevisto();}
   });
@@ -499,14 +501,14 @@ function buscarCodigo(raw){
   var cod=String(parseInt(raw.replace(/\D/g,'')));
   if(!cod||cod==='NaN')return;
 
-  // Encontrar todas as variações (mesmo cod, controles diferentes)
+  // Encontrar todas as variacoes (mesmo cod, controles diferentes)
   var matches=Object.keys(itens).filter(function(k){
     var codK=itens[k].codOriginal||k.split('|')[0];
     return codK===cod||k===cod;
   });
 
   if(matches.length===0){
-    // Não encontrado — mostrar opção de não previsto
+    // Nao encontrado -- mostrar opcao de n?o previsto
     pendCod=cod;pendItem=null;pendKey='';
     var inp=document.getElementById('codeInp');
     inp.value=cod;inp.className='code-inp err';
@@ -522,24 +524,24 @@ function buscarCodigo(raw){
     return;
   }
   if(matches.length>1){
-    // Múltiplos controles — mostrar seleção
+    // Multiplos controles -- mostrar selecao
     var inp=document.getElementById('codeInp');
     inp.value=cod;
     mostrarSelecaoControle(cod,matches);
     return;
   }
-  // Único resultado
+  // Unico resultado
   selecionarItemKey(matches[0]);
 }
 
 function mostrarSelecaoControle(cod,matches){
   var modal=document.getElementById('ctrlModal');
-  document.getElementById('ctrlModalSub').textContent='Codigo '+cod+' possui '+matches.length+' variacoes — selecione qual esta contando:';
+  document.getElementById('ctrlModalSub').textContent='Codigo '+cod+' possui '+matches.length+' variacoes -- selecione qual esta contando:';
   document.getElementById('ctrlModalOpts').innerHTML=matches.map(function(key){
     var it=itens[key];
     var atual=bips[key]?bips[key].contagem:0;
     return '<div class="ctrl-opt" onclick="selecionarItemKey(\''+key+'\');fecharCtrlModal()">'
-      +'<span class="ctrl-opt-badge">'+(it.controle||'—')+'</span>'
+      +'<span class="ctrl-opt-badge">'+(it.controle||'--')+'</span>'
       +'<div class="ctrl-opt-info">'
       +'<div class="ctrl-opt-prod">'+it.produto+'</div>'
       +'<div class="ctrl-opt-esp">'+it.local+' &bull; '+(it.unidade||'')+' Esp:'+it.esperado+' Atual:'+atual+'</div>'
@@ -579,8 +581,7 @@ function selecionarItemKey(key){
   document.getElementById('btnConfirm').disabled=false;
   document.getElementById('btnNp').style.display='none';
   document.getElementById('npPanel').style.display='none';
-  document.getElementById('qtyVal').focus();
-  document.getElementById('qtyVal').select();
+  var qv=document.getElementById('qtyVal');qv.focus();qv.select();
 }
 
 function resetPreview(){
@@ -596,7 +597,7 @@ function resetPreview(){
 
 function adjQty(d){var el=document.getElementById('qtyVal');el.value=Math.max(1,(parseInt(el.value)||1)+d);}
 
-// ── Confirmar ─────────────────────────────────────────────────
+// -- Confirmar -------------------------------------------------
 async function confirmar(){
   if(!pendKey&&!pendItem)return;
   var key=pendKey||pendCod;
@@ -680,7 +681,7 @@ async function confirmarEncerrar(){
   document.getElementById('fim').style.display='flex';
 }
 
-// ── Stats ─────────────────────────────────────────────────────
+// -- Stats -----------------------------------------------------
 function rStats(){
   var tot=Object.keys(meuItens).length,ok=0,dv=0;
   Object.keys(bips).forEach(function(k){
@@ -694,27 +695,23 @@ function rStats(){
   document.getElementById('sNp').textContent=Object.keys(naoPrevistos).length;
 }
 
-// ── Lista (só itens com controle) ─────────────────────────────
+// -- Lista (so itens com controle) -----------------------------
 function renderLista(){
   var filter=(document.getElementById('listaFilter').value||'').toLowerCase();
   var scroll=document.getElementById('listaScroll');
   var html='';
-  // Agrupar itens com controle por cod original
-  var grupos={};
-  Object.entries(meuItens).forEach(function(e){
-    var key=e[0],it=e[1];
-    if(!it.controle)return;
-    var cod=it.codOriginal||key.split('|')[0];
-    if(filter&&(cod+' '+it.produto+' '+it.controle).toLowerCase().indexOf(filter)<0)return;
-    if(!grupos[cod])grupos[cod]={produto:it.produto,itens:[]};
-    grupos[cod].itens.push({key:key,it:it});
+
+  var comCtrl=Object.entries(meuItens).filter(function(e){
+    var it=e[1]; if(!it.controle)return false;
+    if(!filter)return true;
+    var cod=it.codOriginal||e[0].split('|')[0];
+    return (cod+' '+it.produto+' '+it.controle).toLowerCase().indexOf(filter)>=0;
   });
 
-  Object.entries(grupos).forEach(function(ge){
-    var cod=ge[0],grupo=ge[1];
-    html+='<div class="ctrl-section"><div class="ctrl-section-title">'+cod+' &mdash; '+grupo.produto+'</div>';
-    grupo.itens.forEach(function(gi){
-      var key=gi.key,it=gi.it;
+  if(comCtrl.length){
+    html+='<div class="ctrl-section"><div class="ctrl-section-title">&#9888; Itens com Controle ('+comCtrl.length+')</div>';
+    comCtrl.forEach(function(e){
+      var key=e[0],it=e[1],cod=it.codOriginal||key.split('|')[0];
       var b=bips[key]?bips[key].contagem:0,esp=it.esperado;
       var st=b===0?'pend':(b===esp?'ok':'div');
       var ctrlVal=bips[key]&&bips[key].controleValor?bips[key].controleValor:'';
@@ -722,46 +719,72 @@ function renderLista(){
       html+='<div style="display:flex;align-items:center;gap:.5rem" onclick="toggleCtrlForm(\'form_'+key+'\')">';
       html+='<div class="li-dot '+st+'" style="flex-shrink:0"></div>';
       html+='<div class="li-info">';
-      html+='<div class="li-cod"><span style="font-size:.6rem;font-weight:800;background:rgba(180,83,9,.12);color:var(--yw);border-radius:4px;padding:.05rem .28rem">'+it.controle+'</span></div>';
-      html+='<div class="li-prod">'+it.local+(ctrlVal?' &bull; <strong style="color:var(--yw)">'+ctrlVal+'</strong>':'')+'</div>';
+      html+='<div class="li-cod">'+cod+' <span style="font-size:.6rem;font-weight:800;background:rgba(180,83,9,.12);color:var(--yw);border-radius:4px;padding:.05rem .28rem">'+it.controle+'</span></div>';
+      html+='<div class="li-prod">'+it.produto+'</div>';
+      html+='<div class="li-loc">'+it.local+(ctrlVal?' &bull; <strong style="color:var(--yw)">'+ctrlVal+'</strong>':'')+'</div>';
       html+='</div>';
       html+='<div class="li-nums" onclick="toggleCtrlForm(\'form_'+key+'\')">';
       html+='<div class="li-bip '+(st==='ok'?'n-gn':st==='div'?'n-rd':'')+'">'+b+'</div>';
       html+='<div class="li-esp">'+(it.unidade||'')+' esp:'+esp+'</div>';
       html+='</div>';
-      html+='<span style="font-size:.85rem;color:var(--tm);padding-left:.3rem" onclick="toggleCtrlForm(\'form_'+key+'\')">&#9660;</span>';
+      html+='<span style="font-size:.85rem;color:var(--tm);padding-left:.3rem" onclick="toggleCtrlForm(\'form_'+key+'\')">' +'&#9660;</span>';
       html+='</div>';
-      // Form inline
       html+='<div class="ctrl-form" id="form_'+key+'">';
       html+='<div class="ctrl-form-lbl">Valor do controle ('+it.controle+')</div>';
-      html+='<input type="text" id="ctrlv_'+key+'" placeholder="Ex: numero de serie, lote..." value="'+ctrlVal+'">';
+      html+='<input type="text" id="ctrlv_'+key+'" placeholder="Ex: num. serie, lote..." value="'+ctrlVal+'">';
       html+='<div class="ctrl-qty-row"><span class="ctrl-qty-lbl">Quantidade</span>';
       html+='<div style="display:flex;align-items:center;gap:.35rem">';
       html+='<button class="qty-btn" onclick="adjCtrlQty(\'qty_'+key+'\',-1)">&#8722;</button>';
       html+='<input class="qty-val" type="number" id="qty_'+key+'" value="'+(b||1)+'" min="1" style="width:50px">';
       html+='<button class="qty-btn" onclick="adjCtrlQty(\'qty_'+key+'\',1)">+</button>';
       html+='</div></div>';
-      html+='<button class="ctrl-btn" onclick="confirmarCtrl(\''+key+'\')">&#10003; '+(b>0?'Atualizar':'Confirmar')+'</button>';
+      html+='<button class="ctrl-btn" onclick="confirmarCtrl(\''+key+'\')">' +'&#10003; '+(b>0?'Atualizar':'Confirmar')+'</button>';
       html+='</div></div>';
     });
     html+='</div>';
+  }
+
+  var semCtrl=Object.entries(meuItens).filter(function(e){
+    var it=e[1]; if(it.controle)return false;
+    if(!filter)return true;
+    var cod=it.codOriginal||e[0].split('|')[0];
+    return (cod+' '+it.produto).toLowerCase().indexOf(filter)>=0;
   });
 
-  // Não previstos
+  if(semCtrl.length){
+    if(comCtrl.length)html+='<div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.09em;color:var(--tm);padding:.3rem .5rem .2rem">Demais itens</div>';
+    semCtrl.forEach(function(e){
+      var key=e[0],it=e[1],cod=it.codOriginal||key.split('|')[0];
+      var b=bips[key]?bips[key].contagem:0,esp=it.esperado;
+      var st=b===0?'pend':(b===esp?'ok':'div');
+      var nc=bips[key]&&bips[key].naoConformidade;
+      html+='<div class="litem '+st+'-row" onclick="preencherCodigo(\''+key+'\')">';
+      html+='<div class="li-dot '+st+'"></div>';
+      html+='<div class="li-info">';
+      html+='<div class="li-cod">'+cod+(nc?' <span style="font-size:.58rem;color:var(--yw)">NC</span>':'')+'</div>';
+      html+='<div class="li-prod">'+it.produto+'</div>';
+      html+='<div class="li-loc">'+it.local+'</div>';
+      html+='</div>';
+      html+='<div class="li-nums">';
+      html+='<div class="li-bip '+(st==='ok'?'n-gn':st==='div'?'n-rd':'')+'">'+b+'</div>';
+      html+='<div class="li-esp">'+(it.unidade||'')+' esp:'+esp+'</div>';
+      html+='</div></div>';
+    });
+  }
+
   Object.entries(naoPrevistos).forEach(function(e){
     var cod=e[0],np=e[1];
     if(filter&&(cod+' '+(np.descricao||'')).toLowerCase().indexOf(filter)<0)return;
-    html+='<div class="litem np-row" onclick="preencherCodigo(\''+cod+'\')">'
-      +'<div class="li-dot np"></div>'
-      +'<div class="li-info">'
-      +'<div class="li-cod">'+cod+' <span style="font-size:.58rem;color:#2563EB">NAO PREVISTO</span></div>'
-      +'<div class="li-prod">'+(np.descricao||'Item nao previsto')+'</div>'
-      +'</div>'
-      +'<div class="li-nums"><div class="li-bip n-bl">'+np.contagem+'</div><div class="li-esp">contado</div></div></div>';
+    html+='<div class="litem np-row" onclick="preencherCodigo(\''+cod+'\')"><div class="li-dot np"></div>';
+    html+='<div class="li-info"><div class="li-cod">'+cod+' <span style="font-size:.58rem;color:#2563EB">NAO PREVISTO</span></div>';
+    html+='<div class="li-prod">'+(np.descricao||'Item nao previsto')+'</div></div>';
+    html+='<div class="li-nums"><div class="li-bip n-bl">'+np.contagem+'</div><div class="li-esp">contado</div></div></div>';
   });
-  if(!html)html='<div style="text-align:center;color:var(--tm);font-size:.78rem;padding:2rem">Nenhum item com controle neste local.<br><br>Itens sem controle: use Scanner/Entrada.</div>';
+
+  if(!html)html='<div style="text-align:center;color:var(--tm);font-size:.78rem;padding:2rem">Nenhum item encontrado.</div>';
   scroll.innerHTML=html;
 }
+
 
 function toggleCtrlForm(id){
   var f=document.getElementById(id);if(!f)return;
@@ -811,7 +834,7 @@ function addHist(o){
   }).join('');
 }
 
-// ── Camera ────────────────────────────────────────────────────
+// -- Camera ----------------------------------------------------
 async function abrirCamera(){
   if(!camOk)return;
   try{
