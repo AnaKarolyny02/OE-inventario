@@ -312,10 +312,19 @@ if(localStorage.getItem('oe-theme')==='dark'){
 
 // -- Firebase -------------------------------------------------
 async function fbReq(m,p,d){
-  try{var o={method:m,headers:{'Content-Type':'application/json'}};
+  try{
+    var o={method:m,headers:{'Content-Type':'application/json'}};
     if(d!==undefined)o.body=JSON.stringify(d);
-    return (await fetch(DB_URL+p+'.json',o)).json();
-  }catch(e){return null;}
+    var resp=await fetch(DB_URL+p+'.json',o);
+    if(!resp.ok){
+      console.error('Firebase erro '+resp.status+' em '+m+' '+p);
+      return null;
+    }
+    return resp.json();
+  }catch(e){
+    console.error('Firebase excecao em '+m+' '+p+': '+e.message);
+    return null;
+  }
 }
 function fbG(p){return fbReq('GET',p,undefined);}
 function fbPa(p,d){return fbReq('PATCH',p,d);}
