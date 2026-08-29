@@ -220,7 +220,7 @@ select.inp{cursor:pointer;appearance:none}
       </div>
       <div class="action-row">
         <button class="btn-confirm" id="btnConfirm" onclick="confirmar()" disabled>&#10003; Confirmar</button>
-        <button class="btn-np" id="btnNp" onclick="toggleNpPanel()">+ Nao previsto</button>
+        <button class="btn-np" id="btnNp" onclick="toggleNpPanel()">&#215; Fechar</button>
       </div>
       <div class="np-panel" id="npPanel">
         <div style="font-size:.75rem;font-weight:600;color:#2563EB">Adicionar item nao previsto na lista</div>
@@ -533,6 +533,9 @@ function buscarCodigo(raw){
       +'<div class="pc-meta"><span class="pc-badge err">&#10005; Fora da lista</span>'
       +'<span style="font-size:.65rem;color:var(--td)">Use "Nao previsto" para registrar mesmo assim</span></div>';
     btnConf.disabled=true;btnNp.style.display='';
+    // Abrir painel automaticamente ao detectar código desconhecido
+    document.getElementById('npPanel').style.display='flex';
+    document.getElementById('npDesc').focus();
   }
   document.getElementById('qtyVal').focus();
   document.getElementById('qtyVal').select();
@@ -553,8 +556,9 @@ function adjQty(d){var el=document.getElementById('qtyVal');el.value=Math.max(1,
 
 function toggleNpPanel(){
   var p=document.getElementById('npPanel');
-  p.style.display=p.style.display==='none'?'flex':'none';
-  if(p.style.display==='flex')document.getElementById('npDesc').focus();
+  var oculto=(p.style.display===''||p.style.display==='none');
+  p.style.display=oculto?'flex':'none';
+  if(oculto)document.getElementById('npDesc').focus();
 }
 
 // ── Confirmar entrada ─────────────────────────────────────────
@@ -600,6 +604,7 @@ async function confirmarNaoPrevisto(){
   addHist({cod:pendCod,produto:desc,cls:'np',qty:'x'+qty,hora:hora,tags:'np'});
   rStats();
   document.getElementById('npDesc').value='';
+  document.getElementById('npPanel').style.display='none';
   resetPreview();document.getElementById('codeInp').value='';document.getElementById('codeInp').focus();
 }
 
