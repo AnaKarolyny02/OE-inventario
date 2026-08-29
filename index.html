@@ -136,6 +136,9 @@ select.inp{cursor:pointer;appearance:none}
 .ctrl-opt-prod{font-size:.82rem;font-weight:600;color:var(--tx)}
 .ctrl-opt-esp{font-size:.7rem;color:var(--td)}
 .ctrl-cancel{padding:.65rem;background:var(--cd);color:var(--td);border:1px solid var(--br);border-radius:10px;cursor:pointer;font-size:.85rem;text-align:center}
+.ctrl-search{width:100%;padding:.65rem .85rem;font-size:.95rem;font-family:'Consolas','Courier New',monospace;background:var(--sf);border:2px solid var(--gn);border-radius:10px;color:var(--tx);outline:none;letter-spacing:.05em}
+.ctrl-search::placeholder{color:var(--tm);font-family:'Segoe UI',system-ui,sans-serif;font-size:.85rem}
+.ctrl-search-hint{font-size:.7rem;color:var(--td);text-align:center}
 /* Camera */
 .cam-modal{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;padding:1rem}
 .cam-box{width:100%;max-width:400px;display:flex;flex-direction:column;gap:.7rem}
@@ -260,6 +263,11 @@ select.inp{cursor:pointer;appearance:none}
   <div class="ctrl-modal-box">
     <div class="ctrl-modal-title">&#9888; Selecione o controle</div>
     <div class="ctrl-modal-sub" id="ctrlModalSub"></div>
+    <input class="ctrl-search" id="ctrlSearchInp" type="text"
+      placeholder="Digite o controle ou filtre a lista..."
+      autocomplete="off" spellcheck="false"
+      oninput="filtrarCtrlOpts()" onkeydown="ctrlSearchKey(event)">
+    <div class="ctrl-search-hint">&#9166; Enter para confirmar o que digitou &bull; ou toque uma opcao</div>
     <div id="ctrlModalOpts"></div>
     <div class="ctrl-cancel" onclick="fecharCtrlModal()">Cancelar</div>
   </div>
@@ -487,13 +495,26 @@ document.addEventListener('DOMContentLoaded',function(){
     if(e.key==='Enter'){e.preventDefault();confirmarNaoPrevisto();}
   });
   document.addEventListener('click',function(e){
+    var active=document.activeElement;
+    var ids=['qtyVal','npDesc'];
+    if(ids.indexOf(active&&active.id)>=0)return;
     if(document.getElementById('abaEntrada').style.display!=='none'
        &&!e.target.closest('#abaEntrada')&&!e.target.closest('#ctrlModal')&&!e.target.closest('#camModal'))
       setTimeout(function(){document.getElementById('codeInp').focus();},50);
   });
   inp.addEventListener('blur',function(){
-    if(document.getElementById('abaEntrada').style.display!=='none'&&!camStream)
-      setTimeout(function(){inp.focus();},100);
+    // So refoca se o foco foi para fora da area de entrada (nao para qty, npDesc etc)
+    setTimeout(function(){
+      var active=document.activeElement;
+      var protegidos=['qtyVal','npDesc','mCod','mQty'];
+      var eProtegido=protegidos.indexOf(active&&active.id)>=0;
+      var eModal=active&&(active.closest('#ctrlModal')||active.closest('#camModal'));
+      if(!eProtegido&&!eModal
+         &&document.getElementById('abaEntrada').style.display!=='none'
+         &&!camStream){
+        inp.focus();
+      }
+    },150);
   });
 });
 
@@ -537,24 +558,81 @@ function buscarCodigo(raw){
   selecionarItemKey(matches[0]);
 }
 
+var _ctrlMatches=[];
+var _ctrlCodAtual='';
+
 function mostrarSelecaoControle(cod,matches){
-  var modal=document.getElementById('ctrlModal');
+  _ctrlMatches=matches;
+  _ctrlCodAtual=cod;
   var temCtrl=matches.some(function(k){return itens[k]&&itens[k].controle;});
   document.getElementById('ctrlModalSub').textContent=temCtrl
-    ? 'Codigo '+cod+' -- selecione o CONTROLE encontrado fisicamente na locacao:'
-    : 'Codigo '+cod+' -- selecione a variacao correta:';
-  document.getElementById('ctrlModalOpts').innerHTML=matches.map(function(key){
-    var it=itens[key];
-    var atual=bips[key]?bips[key].contagem:0;
-    return '<div class="ctrl-opt" onclick="selecionarItemKey(\''+key+'\');fecharCtrlModal()">'
-      +'<span class="ctrl-opt-badge">'+(it.controle||'--')+'</span>'
+    ?'Codigo '+cod+' -- Qual controle voce encontrou fisicamente?'
+    :'Codigo '+cod+' -- selecione a variacao:';
+  var si=document.getElementById('ctrlSearchInp');
+  si.value='';
+  renderCtrlOpts('');
+  document.getElementById('ctrlModal').style.display='flex';
+  setTimeout(function(){si.focus();si.select();},150);
+}
+
+function renderCtrlOpts(filtro){
+  var f=filtro.trim().toLowerCase();
+  var visibles=_ctrlMatches.filter(function(k){
+    var it=itens[k];
+    return !f||(it.controle||'').toLowerCase().indexOf(f)>=0;
+  });
+  var html=visibles.map(function(key){
+    var it=itens[key],atual=bips[key]?bips[key].contagem:0,jaConf=atual>0;
+    return '<div class="ctrl-opt" data-key="'+key+'">'
+      +'<span class="ctrl-opt-badge" style="'+(jaConf?'background:rgba(22,163,74,.15);color:var(--gn)':'')+'">'+( it.controle||'--')+'</span>'
       +'<div class="ctrl-opt-info">'
       +'<div class="ctrl-opt-prod">'+it.produto+'</div>'
-      +'<div class="ctrl-opt-esp">'+it.local+' &bull; '+(it.unidade||'')+' Esp:'+it.esperado+' Atual:'+atual+'</div>'
-      +'</div></div>';
+      +'<div class="ctrl-opt-esp">'+it.local+' &bull; '+(it.unidade||'')+' Esp:'+it.esperado+(jaConf?' &bull; <strong style="color:var(--gn)">Contado: '+atual+'</strong>':'')+'</div>'
+      +'</div>'
+      +(jaConf?'<span style="font-size:.7rem;color:var(--gn);font-weight:700">'+atual+'/'+it.esperado+'</span>':'')
+      +'</div>';
   }).join('');
-  modal.style.display='flex';
+  if(!html&&f)html='<div style="text-align:center;padding:.6rem;font-size:.8rem;color:var(--td)">'
+    +'Nenhuma opcao corresponde.<br>Pressione <strong>Enter</strong> para usar <strong>'+filtro.toUpperCase()+'</strong> como controle.</div>';
+  document.getElementById('ctrlModalOpts').innerHTML=html;
+  document.querySelectorAll('#ctrlModalOpts .ctrl-opt').forEach(function(el){
+    el.addEventListener('click',function(){
+      selecionarItemKey(this.getAttribute('data-key'));
+      fecharCtrlModal();
+    });
+  });
 }
+
+function filtrarCtrlOpts(){
+  renderCtrlOpts(document.getElementById('ctrlSearchInp').value);
+}
+
+function ctrlSearchKey(e){
+  var val=document.getElementById('ctrlSearchInp').value.trim();
+  if(e.key==='Escape'){fecharCtrlModal();return;}
+  if(e.key!=='Enter')return;
+  e.preventDefault();
+  if(!val)return;
+  var exact=_ctrlMatches.find(function(k){
+    return (itens[k].controle||'').toLowerCase()===val.toLowerCase();
+  });
+  if(exact){selecionarItemKey(exact);fecharCtrlModal();return;}
+  var filtered=_ctrlMatches.filter(function(k){
+    return (itens[k].controle||'').toLowerCase().indexOf(val.toLowerCase())>=0;
+  });
+  if(filtered.length===1){selecionarItemKey(filtered[0]);fecharCtrlModal();return;}
+  // Controle nao esta na lista: clonar item base com o controle digitado
+  if(_ctrlMatches.length>0){
+    var baseKey=_ctrlMatches[0],baseIt=itens[baseKey];
+    var codBase=baseIt.codOriginal||baseKey.split('|')[0];
+    var newCtrl=val.toUpperCase();
+    var customKey=codBase+'|'+newCtrl;
+    if(!itens[customKey])itens[customKey]=Object.assign({},baseIt,{controle:newCtrl});
+    selecionarItemKey(customKey);fecharCtrlModal();
+  }
+}
+
+
 function fecharCtrlModal(){
   document.getElementById('ctrlModal').style.display='none';
   document.getElementById('codeInp').value='';
