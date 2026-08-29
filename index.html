@@ -142,6 +142,14 @@ select.inp{cursor:pointer;appearance:none}
 .ctrl-search::placeholder{color:var(--tm);font-family:'Segoe UI',system-ui,sans-serif;font-size:.85rem}
 .ctrl-search-hint{font-size:.7rem;color:var(--td);text-align:center}
 /* Camera */
+.nova-sessao-banner{position:fixed;top:0;left:0;right:0;z-index:150;background:linear-gradient(135deg,#2563EB,#1d4ed8);color:#fff;padding:.75rem 1rem;display:none;align-items:center;gap:.75rem;box-shadow:0 4px 16px rgba(0,0,0,.3);animation:slideDown .4s ease}
+@keyframes slideDown{from{transform:translateY(-100%)}to{transform:translateY(0)}}
+.nsb-icon{font-size:1.4rem;flex-shrink:0}
+.nsb-info{flex:1}
+.nsb-title{font-size:.88rem;font-weight:700}
+.nsb-sub{font-size:.75rem;opacity:.85}
+.nsb-btn{padding:.5rem 1rem;background:#fff;color:#2563EB;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer;flex-shrink:0}
+.nsb-close{width:24px;height:24px;background:rgba(255,255,255,.2);border:none;border-radius:50%;color:#fff;cursor:pointer;font-size:.85rem;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .cam-modal{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:200;display:none;flex-direction:column;align-items:center;justify-content:center;padding:1rem}
 .cam-box{width:100%;max-width:400px;display:flex;flex-direction:column;gap:.7rem}
 .cam-hdr{display:flex;justify-content:space-between;align-items:center;color:#fff}
@@ -189,6 +197,15 @@ select.inp{cursor:pointer;appearance:none}
   <div class="stitle">Aguardando sessao...</div>
   <div class="ssub">O supervisor ainda nao iniciou. Aguarde.</div>
   <button class="btn-sec" onclick="voltarE()">Voltar</button>
+</div>
+<div id="novaContagemBanner" class="nova-sessao-banner">
+  <div class="nsb-icon">&#128257;</div>
+  <div class="nsb-info">
+    <div class="nsb-title" id="nsbTitle">Nova contagem disponivel!</div>
+    <div class="nsb-sub" id="nsbSub">O supervisor iniciou uma nova contagem. Toque para conectar.</div>
+  </div>
+  <button class="nsb-btn" onclick="irParaNovaContagem()">Conectar</button>
+  <button class="nsb-close" onclick="fecharBanner()">&#10005;</button>
 </div>
 <div id="scan">
   <header class="topbar">
@@ -288,6 +305,95 @@ select.inp{cursor:pointer;appearance:none}
   </div>
 </div>
 <script>
+// Sessoes ja encerradas por este separador (nao mostrar novamente)
+function marcarSessaoEncerrada(id){
+  try{
+    var enc=JSON.parse(localStorage.getItem('oe-sep-enc')||'[]');
+    if(enc.indexOf(id)<0)enc.push(id);
+    if(enc.length>100)enc=enc.slice(-100);
+    localStorage.setItem('oe-sep-enc',JSON.stringify(enc));
+  }catch(e){}
+}
+function getSessoesEncerradas(){
+  try{return JSON.parse(localStorage.getItem('oe-sep-enc')||'[]');}
+  catch(e){return [];}
+}
+
+
+// ── Verificar nova contagem disponivel ───────────────────────
+var _novaContagem=null;
+var _bannerFechado=false;
+
+async function verificarNovaContagem(){
+  if(!sid)return;
+  try{
+    // Buscar todas as sessoes ativas
+    var todas=await fbG(PATH+'/sessoes');
+    if(!todas)return;
+    var melhor=null,melhorCont=0;
+    Object.keys(todas).forEach(function(id){
+      if(id===sid)return; // pular sessao atual
+      var info=todas[id]&&todas[id].info;
+      if(!info||info.status!=='ativo')return;
+      // Verificar se e recontagem da mesma sessao (mesmo titulo base)
+      var tit=info.titulo||'';
+      var titAtual=localSel||'';
+      var mesmaTit=tit.indexOf(sessaoTitulo)>=0||sessaoTitulo.indexOf(tit.split('(')[0].trim())>=0;
+      var contN=info.contagem||1;
+      if(contN>1&&contN>melhorCont){
+        melhor={id:id,info:info};
+        melhorCont=contN;
+      }
+    });
+    if(melhor&&!_bannerFechado){
+      _novaContagem=melhor;
+      var cntL=['1a','2a','3a'][melhorCont-1]||melhorCont+'a';
+      document.getElementById('nsbTitle').textContent=cntL+' Contagem disponivel: '+melhor.info.titulo;
+      document.getElementById('nsbSub').textContent='O supervisor iniciou uma nova contagem. Toque "Conectar" para participar.';
+      document.getElementById('novaContagemBanner').style.display='flex';
+    }
+  }catch(e){}
+}
+
+async function irParaNovaContagem(){
+  if(!_novaContagem)return;
+  fecharBanner();
+  // Salvar progresso atual
+  await fbPa(PATH+'/sessoes/'+sid+'/separadores/'+encN(nome),{status:'pausado',pausadoEm:new Date().toISOString()});
+  limparEstado();
+  // Conectar a nova sessao
+  sid=_novaContagem.id;
+  var info=_novaContagem.info;
+  // Carregar itens da nova sessao
+  document.getElementById('scan').style.display='none';
+  document.getElementById('wait').style.display='flex';
+  bips={};naoPrevistos={};hist=[];totB=0;_novaContagem=null;
+  var its=await fbG(PATH+'/sessoes/'+sid+'/itens');
+  if(its){
+    itens=its;meuItens={};
+    Object.keys(its).forEach(function(k){
+      var it=its[k];
+      if(typeof it.esperado==='string')it.esperado=parseFloat(it.esperado.replace(/,/g,'.'))||0;
+      if(it.local===localSel||grupoRua(it.local)===localSel)meuItens[k]=it;
+    });
+    await fbPa(PATH+'/sessoes/'+sid+'/separadores/'+encN(nome),
+      {nome:nome,local:localSel,status:'ativo',inicio:new Date().toISOString(),ultimaAtividade:Date.now()});
+    abrirScan();
+  }else{
+    alert('Erro ao carregar nova sessao.');
+    document.getElementById('wait').style.display='none';
+    document.getElementById('scan').style.display='flex';
+  }
+}
+
+function fecharBanner(){
+  _bannerFechado=true;
+  document.getElementById('novaContagemBanner').style.display='none';
+}
+
+var sessaoTitulo='';
+
+
 var DB_URL='https://inventarium-43347-default-rtdb.firebaseio.com',PATH='/oe_inventario';
 var nome='',localSel='',sid=null,itens={},meuItens={},bips={},naoPrevistos={},hist=[],totB=0,wT=null;
 var pendCod='',pendItem=null,pendKey='';
@@ -397,7 +503,10 @@ async function carregarSessoes(){
 }
 function preenchSessoes(){
   var sel=document.getElementById('inSessao');
-  var ids=Object.keys(sessoesDisp).sort(function(a,b){return new Date(sessoesDisp[b].inicio||0)-new Date(sessoesDisp[a].inicio||0);});
+  var _enc=getSessoesEncerradas();
+  var ids=Object.keys(sessoesDisp)
+    .filter(function(id){return _enc.indexOf(id)<0;})
+    .sort(function(a,b){return new Date(sessoesDisp[b].inicio||0)-new Date(sessoesDisp[a].inicio||0);});
   if(!ids.length){sel.innerHTML='<option value="">Nenhuma sessao ativa...</option>';sel.disabled=true;return;}
   var cnts=['1a','2a','3a'];
   sel.innerHTML='<option value="">-- Selecione a sessao --</option>'
@@ -477,6 +586,11 @@ function abrirScan(){
   document.getElementById('scan').style.display='flex';
   document.getElementById('hNome').textContent=nome;
   document.getElementById('hLoc').textContent=localSel+' -- '+Object.keys(meuItens).length+' itens';
+  // Salvar titulo da sessao atual para comparar com novas
+  if(sessoesDisp[sid])sessaoTitulo=sessoesDisp[sid].titulo||'';
+  _bannerFechado=false;
+  // Verificar nova contagem a cada 30s
+  setInterval(verificarNovaContagem,30000);
   document.getElementById('sTt').textContent=Object.keys(meuItens).length;
   if(!camOk){var b=document.getElementById('camBtn');b.classList.add('off');b.onclick=function(){alert('Camera requer Chrome no Android.');};}
   rStats();renderLista();salvarEstado();
@@ -815,6 +929,7 @@ async function confirmarEncerrar(){
     if(cnt===e)ok++;else if(cnt>0)dv++;
   });
   limparEstado();
+  marcarSessaoEncerrada(sid);  // nao mostrar mais na selecao inicial
   document.getElementById('fimNome').textContent=nome+' -- '+localSel;
   document.getElementById('fimOk').textContent=ok;
   document.getElementById('fimDv').textContent=dv;
