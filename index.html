@@ -337,10 +337,58 @@ function chkEntry(){
 
 var sessoesDisponiveis={};  // {id: info}
 
+
+// ── Persistência de estado (localStorage) ────────────────────
+function salvarEstado(){
+  try{
+    localStorage.setItem('oe-sep',JSON.stringify({
+      nome:nome,ruaSel:ruaSel,sid:sid,bips:bips,
+      naoPrevistos:naoPrevistos,totB:totB,ts:Date.now()
+    }));
+  }catch(e){}
+}
+function limparEstado(){
+  try{localStorage.removeItem('oe-sep');}catch(e){}
+}
+
+async function tentarRestaurar(){
+  try{
+    var raw=localStorage.getItem('oe-sep');
+    if(!raw)return false;
+    var st=JSON.parse(raw);
+    // Expirar após 12h sem atividade
+    if(!st.sid||!st.nome||(Date.now()-st.ts)>43200000){limparEstado();return false;}
+    // Verificar se sessão ainda está ativa
+    var info=await fbG(PATH+'/sessoes/'+st.sid+'/info');
+    if(!info||info.status!=='ativo'){limparEstado();return false;}
+    // Restaurar estado
+    nome=st.nome;ruaSel=st.ruaSel;sid=st.sid;
+    bips=st.bips||{};naoPrevistos=st.naoPrevistos||{};totB=st.totB||0;
+    // Carregar itens
+    var its=await fbG(PATH+'/sessoes/'+sid+'/itens');
+    if(!its){limparEstado();return false;}
+    itens=its;meuItens={};
+    Object.keys(its).forEach(function(k){
+      var it=its[k];
+      if(typeof it.esperado==='string')it.esperado=parseFloat(it.esperado.replace(/,/g,'.'))||0;
+      if(it.local===ruaSel||grupoRua(it.local)===ruaSel)meuItens[k]=it;
+    });
+    // Registrar atividade
+    await fbPa(PATH+'/sessoes/'+sid+'/separadores/'+encN(nome),
+      {nome:nome,local:ruaSel,rua:ruaSel,status:'ativo',ultimaAtividade:Date.now()});
+    return true;
+  }catch(e){limparEstado();return false;}
+}
+
 (async function init(){
+  // Tentar restaurar estado anterior (evita voltar à tela inicial no refresh)
+  var restaurado=await tentarRestaurar();
+  if(restaurado){
+    abrirScan();
+    return;
+  }
   await carregarSessoes();
-  // Atualizar a cada 10s para capturar novas sessoes criadas no monitor
-  setInterval(carregarSessoes, 10000);
+  setInterval(carregarSessoes,10000);
 })();
 
 async function carregarSessoes(){
@@ -422,6 +470,7 @@ function voltarEntry(){
   document.getElementById('inRua').innerHTML='<option value=>Selecione a sessao primeiro...</option>';
   document.getElementById('inRua').disabled=true;
   document.getElementById('btnE').disabled=true;
+  limparEstado();
   document.getElementById('entry').style.display='flex';
 }
 
@@ -617,6 +666,7 @@ async function confirmarNaoPrevisto(){
   rStats();
   document.getElementById('npDesc').value='';
   document.getElementById('npPanel').style.display='none';
+  salvarEstado();
   resetPreview();document.getElementById('codeInp').value='';document.getElementById('codeInp').focus();
 }
 
@@ -627,7 +677,7 @@ async function zerarContagem(){
   var sp=PATH+'/sessoes/'+sid+'/separadores/'+encN(nome);
   await fbP(sp+'/bipagens',null);
   await fbP(sp+'/naoPrevistos',null);
-  rStats();renderLista();
+  rStats();renderLista();salvarEstado();
   document.getElementById('hlist').innerHTML='<div style="text-align:center;color:var(--tm);font-size:.77rem;padding:1.2rem">Contagem zerada. Pronto para reiniciar.</div>';
   document.getElementById('histCount').textContent='0 lancamentos';
   resetPreview();document.getElementById('codeInp').value='';document.getElementById('codeInp').focus();
@@ -649,6 +699,7 @@ async function confirmarEncerrar(){
   document.getElementById('fimOk').textContent=ok;
   document.getElementById('fimDv').textContent=dv;
   document.getElementById('fimPd').textContent=Math.max(0,tot-ok-dv);
+  limparEstado();
   document.getElementById('scan').style.display='none';
   document.getElementById('fim').style.display='flex';
 }
@@ -771,7 +822,7 @@ async function confirmarCtrl(cod){
   await fbPa(sp,{ultimaAtividade:Date.now()});
   await fbPo(PATH+'/sessoes/'+sid+'/log',{separador:nome,rua:ruaSel,local:it.local,cod:cod,produto:it.produto,resultado:cls,hora:hora,ts:Date.now(),qty:qty,controleValor:ctrlVal||null});
   addHist({cod:cod,produto:it.produto,cls:cls,qty:(qty+'/'+(esp)+(it.unidade?' '+it.unidade:'')+(ctrlVal?' ['+ctrlVal+']':'')),hora:hora,origem:'lista'});
-  rStats();
+  rStats();salvarEstado();
   renderLista();
 }
 
