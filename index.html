@@ -161,8 +161,10 @@ select.inp{cursor:pointer;appearance:none}
   <div class="eb">
     <div class="lbl">Seu nome</div>
     <input class="inp" id="inNome" type="text" placeholder="Ex: Joao Silva" maxlength="30" autocomplete="off">
+    <div class="lbl">Sessao de inventario</div>
+    <select class="inp" id="inSessao" disabled onchange="onSessaoChange()"><option value="">Carregando sessoes...</option></select>
     <div class="lbl">Rua / Area a conferir</div>
-    <select class="inp" id="inRua" disabled><option value="">Aguardando sessao...</option></select>
+    <select class="inp" id="inRua" disabled><option value="">Selecione a sessao primeiro...</option></select>
     <button class="btn-p" id="btnE" onclick="entrar()" disabled>Entrar</button>
   </div>
   <p style="font-size:.67rem;color:var(--tm)">Oliveira Energia S.A. &mdash; Almoxarifado</p>
@@ -315,21 +317,68 @@ function beep(f,d,v){
 // ── Entry ─────────────────────────────────────────────────────
 document.getElementById('inNome').addEventListener('input',chkEntry);
 function chkEntry(){
-  var n=document.getElementById('inNome').value.trim(),r=document.getElementById('inRua').value;
-  document.getElementById('btnE').disabled=(n.length<2||!r);
+  var n=document.getElementById('inNome').value.trim();
+  var s=document.getElementById('inSessao').value;
+  var r=document.getElementById('inRua').value;
+  document.getElementById('btnE').disabled=(n.length<2||!s||!r);
 }
 
+var sessoesDisponiveis={};  // {id: info}
+
 (async function init(){
-  var id=await fbG(PATH+'/sessao_ativa');
-  if(id){var info=await fbG(PATH+'/sessoes/'+id+'/info');if(info&&info.locais)preenchRuas(info.locais);}
-  if(!document.getElementById('inRua').value){
-    wT=setInterval(async function(){
-      var iid=await fbG(PATH+'/sessao_ativa');
-      if(iid){var ii=await fbG(PATH+'/sessoes/'+iid+'/info');
-        if(ii&&ii.locais){clearInterval(wT);preenchRuas(ii.locais);}}
-    },4000);
-  }
+  await carregarSessoes();
+  // Atualizar a cada 10s para capturar novas sessoes criadas no monitor
+  setInterval(carregarSessoes, 10000);
 })();
+
+async function carregarSessoes(){
+  var todas=await fbG(PATH+'/sessoes');
+  if(!todas)return;
+  sessoesDisponiveis={};
+  Object.keys(todas).forEach(function(id){
+    var s=todas[id];
+    if(s&&s.info&&s.info.status==='ativo'){
+      sessoesDisponiveis[id]=s.info;
+    }
+  });
+  preenchSessoes();
+}
+
+function preenchSessoes(){
+  var sel=document.getElementById('inSessao');
+  var ids=Object.keys(sessoesDisponiveis);
+  if(!ids.length){
+    sel.innerHTML='<option value="">Nenhuma sessao ativa no momento...</option>';
+    sel.disabled=true;return;
+  }
+  // Ordenar por data decrescente
+  ids.sort(function(a,b){
+    var da=new Date(sessoesDisponiveis[a].inicio||0).getTime();
+    var db=new Date(sessoesDisponiveis[b].inicio||0).getTime();
+    return db-da;
+  });
+  var html='<option value="">— Selecione a sessao —</option>';
+  ids.forEach(function(id){
+    var info=sessoesDisponiveis[id];
+    var cnt=['1\u00aa','2\u00aa','3\u00aa'][(info.contagem||1)-1]||info.contagem+'\u00aa';
+    var dt=info.inicio?new Date(info.inicio).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}):'';
+    html+='<option value="'+id+'">'+info.titulo+' &mdash; '+cnt+' Cont. ('+dt+')</option>';
+  });
+  sel.innerHTML=html;
+  sel.disabled=false;
+  // Se só tem uma sessão, selecionar automaticamente
+  if(ids.length===1){sel.value=ids[0];onSessaoChange();}
+}
+
+function onSessaoChange(){
+  var sessaoId=document.getElementById('inSessao').value;
+  var ruaSel2=document.getElementById('inRua');
+  if(!sessaoId){ruaSel2.innerHTML='<option value="">Selecione a sessao primeiro...</option>';ruaSel2.disabled=true;chkEntry();return;}
+  var info=sessoesDisponiveis[sessaoId];
+  if(info&&info.locais){preenchRuas(info.locais);}
+  else{ruaSel2.innerHTML='<option value="">Sem locais na sessao...</option>';ruaSel2.disabled=true;}
+  chkEntry();
+}
 
 function preenchRuas(locs){
   // Agrupar por rua (primeiro token)
@@ -343,20 +392,48 @@ function preenchRuas(locs){
 async function entrar(){
   nome=document.getElementById('inNome').value.trim();
   ruaSel=document.getElementById('inRua').value;
-  if(!nome||!ruaSel)return;
+  var sessaoEscolhida=document.getElementById('inSessao').value;
+  if(!nome||!ruaSel||!sessaoEscolhida)return;
+  // Usar direto a sessão escolhida, sem esperar sessao_ativa
+  sid=sessaoEscolhida;
   document.getElementById('entry').style.display='none';
   document.getElementById('wait').style.display='flex';
-  aguardar();
+  aguardarComSessao();
 }
 function voltarE(){clearInterval(wT);document.getElementById('wait').style.display='none';document.getElementById('entry').style.display='flex';}
 function voltarEntry(){
   nome='';ruaSel='';sid=null;itens={};meuItens={};bips={};naoPrevistos={};hist=[];totB=0;
   document.getElementById('fim').style.display='none';
   document.getElementById('inNome').value='';
-  document.getElementById('inRua').innerHTML='<option value="">Aguardando sessao...</option>';
+  document.getElementById('inSessao').innerHTML='<option value="">Carregando sessoes...</option>';
+  document.getElementById('inSessao').disabled=true;
+  document.getElementById('inRua').innerHTML='<option value=>Selecione a sessao primeiro...</option>';
   document.getElementById('inRua').disabled=true;
   document.getElementById('btnE').disabled=true;
   document.getElementById('entry').style.display='flex';
+}
+
+async function aguardarComSessao(){
+  // Usa sid já definido na seleção da sessão
+  var id=sid;
+  if(id){
+    var its=await fbG(PATH+'/sessoes/'+id+'/itens');
+    if(its&&Object.keys(its).length>0){
+      itens=its;meuItens={};
+      Object.keys(its).forEach(function(k){
+        var it=its[k];
+        if(typeof it.esperado==='string')it.esperado=parseFloat(it.esperado.replace(/,/g,'.'))||0;
+        if(grupoRua(it.local)===ruaSel)meuItens[k]=it;
+      });
+      var prev=await fbG(PATH+'/sessoes/'+id+'/separadores/'+encN(nome));
+      if(prev&&prev.bipagens)bips=prev.bipagens;
+      if(prev&&prev.naoBipados)naBip=prev.naoBipados;
+      await fbPa(PATH+'/sessoes/'+sid+'/separadores/'+encN(nome),
+        {nome:nome,local:ruaSel,rua:ruaSel,status:'ativo',inicio:new Date().toISOString(),ultimaAtividade:Date.now()});
+      abrirScan();return;
+    }
+  }
+  wT=setTimeout(aguardarComSessao,3000);
 }
 
 async function aguardar(){
