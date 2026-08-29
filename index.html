@@ -627,9 +627,9 @@ function ctrlSearchKey(e){
   // Controle nao esta na lista: clonar item base com o controle digitado
   if(_ctrlMatches.length>0){
     var baseKey=_ctrlMatches[0],baseIt=itens[baseKey];
-    var codBase=baseIt.codOriginal||baseKey.split('|')[0];
+    var codBase=baseIt.codOriginal||baseKey.split('~')[0].split('|')[0];
     var newCtrl=val.toUpperCase();
-    var customKey=codBase+'|'+newCtrl;
+    var customKey=codBase+'~'+newCtrl;
     if(!itens[customKey]){
       itens[customKey]=Object.assign({},baseIt,{
         controle:newCtrl,
@@ -651,7 +651,7 @@ function fecharCtrlModal(){
 
 function selecionarItemKey(key){
   var it=itens[key];if(!it)return;
-  pendKey=key;pendCod=it.codOriginal||key.split('|')[0];pendItem=it;
+  pendKey=key;pendCod=it.codOriginal||key.split('~')[0].split('|')[0];pendItem=it;
   var inp=document.getElementById('codeInp');
   inp.value=pendCod;
   var ruaItem=grupoRua(it.local);
@@ -941,8 +941,8 @@ async function confirmarCtrl(key){
   var sp=PATH+'/sessoes/'+sid+'/separadores/'+encN(nome);
   await fbPa(sp+'/bipagens/'+key,bips[key]);
   await fbPa(sp,{ultimaAtividade:Date.now()});
-  await fbPo(PATH+'/sessoes/'+sid+'/log',{separador:nome,local:localSel,cod:it.codOriginal||key.split('|')[0],controle:it.controle,produto:it.produto,resultado:cls,hora:hora,ts:Date.now(),qty:qty,controleValor:ctrlVal||null});
-  addHist({cod:it.codOriginal||key.split('|')[0],produto:'['+it.controle+'] '+it.produto,cls:cls,qty:(qty+'/'+esp+(it.unidade?' '+it.unidade:'')+(ctrlVal?' ['+ctrlVal+']':'')),hora:hora,tag:''});
+  await fbPo(PATH+'/sessoes/'+sid+'/log',{separador:nome,local:localSel,cod:it.codOriginal||key.split('~')[0].split('|')[0],controle:it.controle,produto:it.produto,resultado:cls,hora:hora,ts:Date.now(),qty:qty,controleValor:ctrlVal||null});
+  addHist({cod:it.codOriginal||key.split('~')[0].split('|')[0],produto:'['+it.controle+'] '+it.produto,cls:cls,qty:(qty+'/'+esp+(it.unidade?' '+it.unidade:'')+(ctrlVal?' ['+ctrlVal+']':'')),hora:hora,tag:''});
   rStats();salvarEstado();renderLista();
 }
 
