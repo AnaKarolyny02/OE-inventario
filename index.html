@@ -34,6 +34,8 @@ select.inp{cursor:pointer;appearance:none}
 .topbar-loc{font-size:.6rem;color:var(--gn);font-weight:700;text-transform:uppercase;letter-spacing:.05em}
 .tb-btn{height:28px;padding:0 .6rem;border-radius:7px;border:1px solid var(--br);background:var(--cd);cursor:pointer;font-size:.7rem;font-weight:600;white-space:nowrap;color:var(--tx)}
 .tb-btn.danger{background:rgba(220,38,38,.08);color:var(--rd);border-color:rgba(220,38,38,.2)}
+.tb-btn.pausar{background:rgba(37,99,235,.08);color:#2563EB;border-color:rgba(37,99,235,.2)}
+.tb-btn.pausar:hover{background:rgba(37,99,235,.15)}
 .srow{display:grid;grid-template-columns:repeat(5,1fr);background:var(--sf);border-bottom:1px solid var(--br);flex-shrink:0}
 .sc{text-align:center;padding:.35rem .15rem;border-right:1px solid var(--br)}.sc:last-child{border-right:none}
 .sc .n{font-size:1.15rem;font-weight:800}.sc .l{font-size:.52rem;text-transform:uppercase;letter-spacing:.04em;color:var(--tm)}
@@ -196,6 +198,7 @@ select.inp{cursor:pointer;appearance:none}
       <span class="topbar-loc" id="hLoc"></span>
     </div>
     <button class="tb-btn" onclick="zerarContagem()">&#8635; Zerar</button>
+    <button class="tb-btn pausar" onclick="pausarContagem()">&#9646;&#9646; Pausar</button>
     <button class="tb-btn" id="themeBtn2" onclick="toggleTheme()">&#127769;</button>
     <button class="tb-btn danger" onclick="confirmarEncerrar()">&#9209; Encerrar</button>
   </header>
@@ -627,7 +630,14 @@ function ctrlSearchKey(e){
     var codBase=baseIt.codOriginal||baseKey.split('|')[0];
     var newCtrl=val.toUpperCase();
     var customKey=codBase+'|'+newCtrl;
-    if(!itens[customKey])itens[customKey]=Object.assign({},baseIt,{controle:newCtrl});
+    if(!itens[customKey]){
+      itens[customKey]=Object.assign({},baseIt,{
+        controle:newCtrl,
+        controleOriginal:baseIt.controle||'',
+        controledivergente:true,
+        esperado:0
+      });
+    }
     selecionarItemKey(customKey);fecharCtrlModal();
   }
 }
@@ -646,17 +656,25 @@ function selecionarItemKey(key){
   inp.value=pendCod;
   var ruaItem=grupoRua(it.local);
   var fora=it.local!==localSel&&ruaItem!==localSel;
-  var cls=fora?'nc':'ok';
+  var ctrlDiv=it.controledivergente===true;  // controle diferente da lista
+  var cls=(fora||ctrlDiv)?'nc':'ok';
   inp.className='code-inp '+cls;
   var p=document.getElementById('previewCard');
   p.className='preview-card '+cls;
   var atual=bips[key]?bips[key].contagem:0;
   var badge=fora
     ?'<span class="pc-badge nc">&#9888; Outra area ('+it.local+')</span>'
-    :'<span class="pc-badge ok">&#10003; Encontrado</span>';
+    :(ctrlDiv
+      ?'<span class="pc-badge nc">&#9888; Controle divergente</span>'
+      :'<span class="pc-badge ok">&#10003; Encontrado</span>');
   var ctrlBadge=it.controle
     ?'<span class="pc-badge" style="background:rgba(180,83,9,.12);color:var(--yw)">'+it.controle+'</span>':'';
-  var ncWarn=fora?'<div style="font-size:.68rem;color:var(--yw);margin-top:.15rem">&#9888; NAO CONFORMIDADE: item de outra area.</div>':'';
+  var ncWarn=fora
+    ?'<div style="font-size:.68rem;color:var(--yw);margin-top:.15rem">&#9888; NAO CONFORMIDADE: item de outra area.</div>'
+    :(ctrlDiv
+      ?'<div style="font-size:.68rem;color:var(--yw);margin-top:.15rem">&#9888; NAO CONFORMIDADE: controle "'
+        +it.controle+'" nao esta na lista original'+(it.controleOriginal?' (esperado: '+it.controleOriginal+')':'')+'. Sera registrado como divergencia.</div>'
+      :'');
   p.innerHTML='<div class="pc-prod">'+it.produto+'</div>'
     +'<div class="pc-meta"><span class="pc-loc">'+it.local+'</span>'
     +badge+ctrlBadge
@@ -688,21 +706,28 @@ async function confirmar(){
   var it=pendItem;if(!it)return;
   var qty=parseInt(document.getElementById('qtyVal').value)||1;
   var fora=it.local!==localSel&&grupoRua(it.local)!==localSel;
+  var ctrlDiv=it.controledivergente===true;
   var prev=bips[key]?bips[key].contagem:0;
   var nova=prev+qty;
   bips[key]={contagem:nova,ultimaBipagem:Date.now()};
-  if(fora)bips[key].naoConformidade=true;
-  var esp=it.esperado||0,cls=nova===esp?'ok':'div';
+  if(fora||ctrlDiv){
+    bips[key].naoConformidade=true;
+    if(ctrlDiv){
+      bips[key].controleOriginal=it.controleOriginal||'';
+      bips[key].controleDivergente=it.controle;
+    }
+  }
+  var esp=it.esperado||0,cls=(nova===esp&&!ctrlDiv)?'ok':'div';
   beep(fora?850:(cls==='ok'?1100:850),100,0.17);
   totB++;
   var hora=new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
   var sp=PATH+'/sessoes/'+sid+'/separadores/'+encN(nome);
   await fbPa(sp+'/bipagens/'+key,bips[key]);
   await fbPa(sp,{ultimaAtividade:Date.now()});
-  await fbPo(PATH+'/sessoes/'+sid+'/log',{separador:nome,local:localSel,itemLocal:it.local,cod:pendCod,controle:it.controle||'',produto:it.produto,resultado:cls,hora:hora,ts:Date.now(),qty:qty,naoConformidade:fora||false});
+  await fbPo(PATH+'/sessoes/'+sid+'/log',{separador:nome,local:localSel,itemLocal:it.local,cod:pendCod,controle:it.controle||'',controleOriginal:it.controleOriginal||'',produto:it.produto,resultado:cls,hora:hora,ts:Date.now(),qty:qty,naoConformidade:(fora||ctrlDiv),controleDivergente:ctrlDiv});
   var unid=it.unidade||'';
   var ctrl=it.controle?'['+it.controle+'] ':'';
-  addHist({cod:pendCod,produto:ctrl+it.produto,cls:(fora?'nc':cls),qty:(nova+'/'+esp+(unid?' '+unid:'')),hora:hora,tag:(fora?'nc':'')});
+  addHist({cod:pendCod,produto:ctrl+it.produto,cls:((fora||ctrlDiv)?'nc':cls),qty:(nova+'/'+esp+(unid?' '+unid:'')),hora:hora,tag:((fora||ctrlDiv)?'nc':'')});
   rStats();renderLista();salvarEstado();
   resetPreview();
   document.getElementById('codeInp').value='';
@@ -744,6 +769,30 @@ async function zerarContagem(){
   document.getElementById('histCount').textContent='0 lancamentos';
   resetPreview();document.getElementById('codeInp').value='';document.getElementById('codeInp').focus();
   alert('Contagem zerada!');
+}
+
+async function pausarContagem(){
+  if(!confirm('Pausar a contagem?\n\nSeu progresso sera salvo. Voce pode retomar depois selecionando esta sessao na tela inicial.'))return;
+  // Salvar status como "pausado" no Firebase
+  await fbPa(PATH+'/sessoes/'+sid+'/separadores/'+encN(nome),{
+    status:'pausado',
+    pausadoEm:new Date().toISOString(),
+    ultimaAtividade:Date.now()
+  });
+  fecharCamera();
+  limparEstado();
+  // Voltar para tela inicial sem encerrar a sessao
+  nome='';localSel='';sid=null;itens={};meuItens={};bips={};naoPrevistos={};hist=[];totB=0;
+  document.getElementById('scan').style.display='none';
+  document.getElementById('inNome').value='';
+  document.getElementById('inSessao').innerHTML='<option value="">Carregando sessoes...</option>';
+  document.getElementById('inSessao').disabled=true;
+  document.getElementById('inLocal').innerHTML='<option value="">Selecione a sessao primeiro...</option>';
+  document.getElementById('inLocal').disabled=true;
+  document.getElementById('btnE').disabled=true;
+  document.getElementById('entry').style.display='flex';
+  // Recarregar sessoes disponiveis
+  await carregarSessoes();
 }
 
 async function confirmarEncerrar(){
