@@ -368,7 +368,10 @@ async function aguardar(){
       // meuItens = itens da rua selecionada
       meuItens={};
       Object.keys(its).forEach(function(k){
-        if(grupoRua(its[k].local)===ruaSel)meuItens[k]=its[k];
+        var it=its[k];
+        // garantir que esperado é número (pode vir como string com vírgula)
+        if(typeof it.esperado==='string')it.esperado=parseFloat(it.esperado.replace(/,/g,'.'))||0;
+        if(grupoRua(it.local)===ruaSel)meuItens[k]=it;
       });
       var prev=await fbG(PATH+'/sessoes/'+id+'/separadores/'+encN(nome));
       if(prev&&prev.bipagens)bips=prev.bipagens;
@@ -440,7 +443,7 @@ function buscarCodigo(raw){
     var ctrlInfo=itens[cod].controle?'<span class="pc-badge" style="background:rgba(180,83,9,.12);color:var(--yw)">&#9888; Controle: '+itens[cod].controle+'</span>':'';
     preview.innerHTML='<div class="pc-prod">'+itens[cod].produto+'</div>'
       +'<div class="pc-meta"><span class="pc-loc">'+itens[cod].local+'</span>'
-      +badge+ctrlInfo+'<span class="pc-qty">Esp:'+itens[cod].esperado+' Atual:'+atual+'</span></div>'
+      +badge+ctrlInfo+'<span class="pc-qty">'+itens[cod].unidade+' &bull; Esp:'+itens[cod].esperado+' Atual:'+atual+'</span></div>'
       +(itens[cod].controle?'<div style="font-size:.68rem;color:var(--yw);margin-top:.15rem">&#9888; Item com controle especial ('+itens[cod].controle+'). Anote os dados de rastreabilidade.</div>':'')
       +ncTag;
     btnConf.disabled=false;btnNp.style.display='none';
@@ -497,7 +500,8 @@ async function confirmar(){
   await fbPa(sp,{ultimaAtividade:Date.now()});
   await fbPo(PATH+'/sessoes/'+sid+'/log',{separador:nome,rua:ruaSel,local:pendItem.local,cod:pendCod,produto:pendItem.produto,resultado:cls,hora:hora,ts:Date.now(),qty:qty,naoConformidade:naoConformidade});
   var tags=naoConformidade?'nc':'';
-  addHist({cod:pendCod,produto:pendItem.produto,cls:(naoConformidade?'nc':cls),qty:(nova+'/'+esp),hora:hora,tags:tags});
+  var unid=pendItem.unidade||'';
+  addHist({cod:pendCod,produto:pendItem.produto,cls:(naoConformidade?'nc':cls),qty:(nova+'/'+esp+(unid?' '+unid:'')),hora:hora,tags:tags});
   rStats();renderLista();
   resetPreview();
   document.getElementById('codeInp').value='';
@@ -592,7 +596,7 @@ function renderLista(){
       +'<div class="li-loc">'+it.local+'</div>'
       +'</div>'
       +'<div class="li-nums"><div class="li-bip '+(st==='ok'?'n-gn':st==='div'?'n-rd':'')+'">'+b+'</div>'
-      +'<div class="li-esp">esp: '+esp+'</div></div></div>';
+      +'<div class="li-esp">'+(it.unidade||'')+' esp:'+esp+'</div></div></div>';
   });
   // Nao previstos
   Object.entries(naoPrevistos).forEach(function(e){
