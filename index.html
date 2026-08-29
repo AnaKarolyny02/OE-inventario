@@ -306,17 +306,23 @@ select.inp{cursor:pointer;appearance:none}
 </div>
 <script>
 // Sessoes ja encerradas por este separador (nao mostrar novamente)
-function marcarSessaoEncerrada(id){
+function marcarSessaoEncerrada(sessId,local){
+  // Gravar sessao+local (nao so a sessao) para nao bloquear outros locais
   try{
+    var key=sessId+'~'+(local||localSel||'');
     var enc=JSON.parse(localStorage.getItem('oe-sep-enc')||'[]');
-    if(enc.indexOf(id)<0)enc.push(id);
-    if(enc.length>100)enc=enc.slice(-100);
+    if(enc.indexOf(key)<0)enc.push(key);
+    if(enc.length>200)enc=enc.slice(-200);
     localStorage.setItem('oe-sep-enc',JSON.stringify(enc));
   }catch(e){}
 }
 function getSessoesEncerradas(){
   try{return JSON.parse(localStorage.getItem('oe-sep-enc')||'[]');}
   catch(e){return [];}
+}
+function localEncerrado(sessId,local){
+  var enc=getSessoesEncerradas();
+  return enc.indexOf(sessId+'~'+local)>=0;
 }
 
 
@@ -503,9 +509,8 @@ async function carregarSessoes(){
 }
 function preenchSessoes(){
   var sel=document.getElementById('inSessao');
-  var _enc=getSessoesEncerradas();
+  // Não filtra sessões — apenas locais específicos são filtrados em preenchLocais
   var ids=Object.keys(sessoesDisp)
-    .filter(function(id){return _enc.indexOf(id)<0;})
     .sort(function(a,b){return new Date(sessoesDisp[b].inicio||0)-new Date(sessoesDisp[a].inicio||0);});
   if(!ids.length){sel.innerHTML='<option value="">Nenhuma sessao ativa...</option>';sel.disabled=true;return;}
   var cnts=['1a','2a','3a'];
@@ -531,9 +536,18 @@ function onSessaoChange(){
 }
 function preenchLocais(locs){
   var s=document.getElementById('inLocal');
+  var sessaoId=document.getElementById('inSessao').value;
   var ordenados=[...new Set(locs)].sort();
+  // Filtrar locais ja encerrados por este separador nesta sessao
+  var disponiveis=ordenados.filter(function(l){
+    return !localEncerrado(sessaoId,l);
+  });
+  if(!disponiveis.length){
+    s.innerHTML='<option value="">Todos os locais desta sessao ja foram encerrados</option>';
+    s.disabled=true;chkEntry();return;
+  }
   s.innerHTML='<option value="">-- Selecione o local --</option>'
-    +ordenados.map(function(l){return '<option value="'+l+'">'+l+'</option>';}).join('');
+    +disponiveis.map(function(l){return '<option value="'+l+'">'+l+'</option>';}).join('');
   s.disabled=false;s.addEventListener('change',chkEntry);
 }
 
@@ -929,7 +943,7 @@ async function confirmarEncerrar(){
     if(cnt===e)ok++;else if(cnt>0)dv++;
   });
   limparEstado();
-  marcarSessaoEncerrada(sid);  // nao mostrar mais na selecao inicial
+  marcarSessaoEncerrada(sid,localSel);  // marcar só este local como encerrado
   document.getElementById('fimNome').textContent=nome+' -- '+localSel;
   document.getElementById('fimOk').textContent=ok;
   document.getElementById('fimDv').textContent=dv;
