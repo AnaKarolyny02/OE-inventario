@@ -508,35 +508,41 @@ function buscarCodigo(raw){
   });
 
   if(matches.length===0){
-    // Nao encontrado -- mostrar opcao de n?o previsto
+    // Nao encontrado
     pendCod=cod;pendItem=null;pendKey='';
-    var inp=document.getElementById('codeInp');
-    inp.value=cod;inp.className='code-inp err';
-    var p=document.getElementById('previewCard');
-    p.className='preview-card err';
-    p.innerHTML='<div class="pc-prod" style="color:var(--rd)">Codigo '+cod+' nao encontrado na base</div>'
+    var inpE=document.getElementById('codeInp');
+    inpE.value=cod;inpE.className='code-inp err';
+    var pE=document.getElementById('previewCard');
+    pE.className='preview-card err';
+    pE.innerHTML='<div class="pc-prod" style="color:var(--rd)">Codigo '+cod+' nao encontrado na base</div>'
       +'<div class="pc-meta"><span class="pc-badge err">&#10005; Nao encontrado</span>'
-      +'<span style="font-size:.65rem;color:var(--td)">Use "Nao previsto" para registrar</span></div>';
+      +'<span style="font-size:.65rem;color:var(--td)">Use o botao Nao previsto para registrar</span></div>';
     document.getElementById('btnConfirm').disabled=true;
     document.getElementById('btnNp').style.display='';
     document.getElementById('npPanel').style.display='flex';
     document.getElementById('npDesc').focus();
     return;
   }
-  if(matches.length>1){
-    // Multiplos controles -- mostrar selecao
-    var inp=document.getElementById('codeInp');
-    inp.value=cod;
+
+  document.getElementById('codeInp').value=cod;
+
+  // Se codigo tem controle: SEMPRE mostrar selecao
+  // (separador confirma qual controle foi encontrado fisicamente)
+  var temControle=matches.some(function(k){return itens[k]&&itens[k].controle;});
+  if(temControle||matches.length>1){
     mostrarSelecaoControle(cod,matches);
     return;
   }
-  // Unico resultado
+  // Sem controle e unico resultado
   selecionarItemKey(matches[0]);
 }
 
 function mostrarSelecaoControle(cod,matches){
   var modal=document.getElementById('ctrlModal');
-  document.getElementById('ctrlModalSub').textContent='Codigo '+cod+' possui '+matches.length+' variacoes -- selecione qual esta contando:';
+  var temCtrl=matches.some(function(k){return itens[k]&&itens[k].controle;});
+  document.getElementById('ctrlModalSub').textContent=temCtrl
+    ? 'Codigo '+cod+' -- selecione o CONTROLE encontrado fisicamente na locacao:'
+    : 'Codigo '+cod+' -- selecione a variacao correta:';
   document.getElementById('ctrlModalOpts').innerHTML=matches.map(function(key){
     var it=itens[key];
     var atual=bips[key]?bips[key].contagem:0;
