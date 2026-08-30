@@ -96,6 +96,9 @@ select.inp{cursor:pointer;appearance:none}
 .hi-prod{font-size:.72rem;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hi-qty{font-family:'Consolas',monospace;font-size:.66rem;color:var(--td);flex-shrink:0}
 .hi-t{font-size:.58rem;color:var(--tm);flex-shrink:0}
+.hi-del{width:18px;height:18px;border:none;background:transparent;color:var(--tm);cursor:pointer;font-size:.7rem;flex-shrink:0;border-radius:4px;display:flex;align-items:center;justify-content:center;opacity:0}
+.hi:hover .hi-del{opacity:1}
+.hi-del:hover{background:rgba(220,38,38,.1);color:var(--rd)}
 /* Lista */
 .lista-area{display:none;flex-direction:column;overflow:hidden;flex:1}
 .lista-filter{padding:.5rem .7rem;background:var(--sf);border-bottom:1px solid var(--br);flex-shrink:0}
@@ -180,8 +183,10 @@ select.inp{cursor:pointer;appearance:none}
   <div class="stitle">Conferencia de Inventario</div>
   <div class="ssub">Oliveira Energia S.A. &mdash; Almoxarifado</div>
   <div class="eb">
-    <div class="lbl">Seu nome</div>
-    <input class="inp" id="inNome" type="text" placeholder="Ex: Joao Silva" maxlength="30" autocomplete="off">
+    <div class="lbl">Nome do separador</div>
+    <input class="inp" id="inNome" type="text" placeholder="Ex: Joao Silva" maxlength="40" autocomplete="off">
+    <div class="lbl">Nome do fiscal / acompanhante</div>
+    <input class="inp" id="inFiscal" type="text" placeholder="Ex: Ana Karolyny" maxlength="40" autocomplete="off">
     <div class="lbl">Sessao de inventario</div>
     <select class="inp" id="inSessao" disabled onchange="onSessaoChange()"><option value="">Carregando sessoes...</option></select>
     <div class="lbl">Local a conferir</div>
@@ -305,6 +310,46 @@ select.inp{cursor:pointer;appearance:none}
   </div>
 </div>
 <script>
+async function buscarNoCatalogo(cod){
+  var pE=document.getElementById('previewCard');
+  var descEl=document.getElementById('npDesc');
+  try{
+    // Tentar buscar por cod direto
+    var r=await fbG('/oe_inventario/catalogo/'+cod);
+    if(!r){
+      // Tentar buscar por chave exata (com controle)
+      var rShallow=await fetch(DB_URL+'/oe_inventario/catalogo.json?orderBy="codOriginal"&equalTo="'+cod+'"');
+      if(rShallow.ok){var data=await rShallow.json();if(data)r=Object.values(data)[0]||null;}
+    }
+    if(r&&r.produto){
+      // Encontrado no catalogo!
+      pE.className='preview-card nc';
+      pE.innerHTML='<div class="pc-prod">'+r.produto+'</div>'
+        +'<div class="pc-meta">'
+        +'<span class="pc-badge nc">&#9888; Nao previsto nesta sessao</span>'
+        +(r.controle?'<span class="pc-badge" style="background:rgba(180,83,9,.12);color:var(--yw)">'+r.controle+'</span>':'')
+        +'<span class="pc-qty">'+(r.unidade||'')+'</span>'
+        +'</div>'
+        +'<div style="font-size:.68rem;color:var(--td);margin-top:.2rem">&#128218; Encontrado no catalogo ? registre como nao previsto</div>';
+      // Preencher descricao do nao previsto automaticamente
+      if(descEl)descEl.value=r.produto+(r.controle?' ['+r.controle+']':'')+(r.unidade?' ('+r.unidade+')':'');
+    }else{
+      // Nao encontrado nem no catalogo
+      pE.className='preview-card err';
+      pE.innerHTML='<div class="pc-prod" style="color:var(--rd)">Codigo '+pendCod+' nao encontrado</div>'
+        +'<div class="pc-meta"><span class="pc-badge err">&#10005; Nao esta na sessao nem no catalogo</span></div>';
+      if(descEl)descEl.value='';
+    }
+  }catch(e){
+    pE.className='preview-card err';
+    pE.innerHTML='<div class="pc-prod" style="color:var(--rd)">Codigo '+pendCod+' nao encontrado</div>'
+      +'<div class="pc-meta"><span class="pc-badge err">&#10005; Nao encontrado</span></div>';
+  }
+  document.getElementById('npPanel').style.display='flex';
+  if(descEl)descEl.focus();
+}
+
+
 // Sessoes ja encerradas por este separador (nao mostrar novamente)
 function marcarSessaoEncerrada(sessId,local){
   // Gravar sessao+local (nao so a sessao) para nao bloquear outros locais
@@ -326,7 +371,7 @@ function localEncerrado(sessId,local){
 }
 
 
-// ── Verificar nova contagem disponivel ───────────────────────
+// ?? Verificar nova contagem disponivel ???????????????????????
 var _novaContagem=null;
 var _bannerFechado=false;
 
@@ -383,7 +428,7 @@ async function irParaNovaContagem(){
       if(it.local===localSel||grupoRua(it.local)===localSel)meuItens[k]=it;
     });
     await fbPa(PATH+'/sessoes/'+sid+'/separadores/'+encN(nome),
-      {nome:nome,local:localSel,status:'ativo',inicio:new Date().toISOString(),ultimaAtividade:Date.now()});
+      {nome:nome,fiscal:fiscal,local:localSel,status:'ativo',inicio:new Date().toISOString(),ultimaAtividade:Date.now()});
     abrirScan();
   }else{
     alert('Erro ao carregar nova sessao.');
@@ -401,7 +446,7 @@ var sessaoTitulo='';
 
 
 var DB_URL='https://inventarium-43347-default-rtdb.firebaseio.com',PATH='/oe_inventario';
-var nome='',localSel='',sid=null,itens={},meuItens={},bips={},naoPrevistos={},hist=[],totB=0,wT=null;
+var nome='',fiscal='',localSel='',sid=null,itens={},meuItens={},bips={},naoPrevistos={},hist=[],totB=0,wT=null;
 var pendCod='',pendItem=null,pendKey='';
 var camStream=null,camTimer=null,camDetector=null;
 var camOk=('BarcodeDetector' in window);
@@ -509,7 +554,7 @@ async function carregarSessoes(){
 }
 function preenchSessoes(){
   var sel=document.getElementById('inSessao');
-  // Não filtra sessões — apenas locais específicos são filtrados em preenchLocais
+  // N?o filtra sess?es ? apenas locais espec?ficos s?o filtrados em preenchLocais
   var ids=Object.keys(sessoesDisp)
     .sort(function(a,b){return new Date(sessoesDisp[b].inicio||0)-new Date(sessoesDisp[a].inicio||0);});
   if(!ids.length){sel.innerHTML='<option value="">Nenhuma sessao ativa...</option>';sel.disabled=true;return;}
@@ -553,6 +598,8 @@ function preenchLocais(locs){
 
 async function entrar(){
   nome=document.getElementById('inNome').value.trim();
+  fiscal=(document.getElementById('inFiscal')||{}).value||'';
+  fiscal=fiscal.trim();
   localSel=document.getElementById('inLocal').value;
   var sessaoId=document.getElementById('inSessao').value;
   if(!nome||!localSel||!sessaoId)return;
@@ -563,7 +610,7 @@ async function entrar(){
 }
 function voltarE(){clearInterval(wT);document.getElementById('wait').style.display='none';document.getElementById('entry').style.display='flex';}
 function voltarEntry(){
-  nome='';localSel='';sid=null;itens={};meuItens={};bips={};naoPrevistos={};hist=[];totB=0;
+  nome='';fiscal='';localSel='';sid=null;itens={};meuItens={};bips={};naoPrevistos={};hist=[];totB=0;
   limparEstado();
   document.getElementById('fim').style.display='none';
   document.getElementById('inNome').value='';
@@ -588,7 +635,7 @@ async function aguardar(){
     if(prev&&prev.bipagens)bips=prev.bipagens;
     if(prev&&prev.naoPrevistos)naoPrevistos=prev.naoPrevistos;
     await fbPa(PATH+'/sessoes/'+sid+'/separadores/'+encN(nome),
-      {nome:nome,local:localSel,status:'ativo',inicio:new Date().toISOString(),ultimaAtividade:Date.now()});
+      {nome:nome,fiscal:fiscal,local:localSel,status:'ativo',inicio:new Date().toISOString(),ultimaAtividade:Date.now()});
     abrirScan();return;
   }
   wT=setTimeout(aguardar,3000);
@@ -598,7 +645,7 @@ async function aguardar(){
 function abrirScan(){
   document.getElementById('wait').style.display='none';
   document.getElementById('scan').style.display='flex';
-  document.getElementById('hNome').textContent=nome;
+  document.getElementById('hNome').textContent=nome+(fiscal?' | Fiscal: '+fiscal:'');
   document.getElementById('hLoc').textContent=localSel+' -- '+Object.keys(meuItens).length+' itens';
   // Salvar titulo da sessao atual para comparar com novas
   if(sessoesDisp[sid])sessaoTitulo=sessoesDisp[sid].titulo||'';
@@ -669,19 +716,17 @@ function buscarCodigo(raw){
   });
 
   if(matches.length===0){
-    // Nao encontrado
+    // Nao encontrado na sessao ? buscar no catalogo do almoxarifado
     pendCod=cod;pendItem=null;pendKey='';
     var inpE=document.getElementById('codeInp');
     inpE.value=cod;inpE.className='code-inp err';
     var pE=document.getElementById('previewCard');
     pE.className='preview-card err';
-    pE.innerHTML='<div class="pc-prod" style="color:var(--rd)">Codigo '+cod+' nao encontrado na base</div>'
-      +'<div class="pc-meta"><span class="pc-badge err">&#10005; Nao encontrado</span>'
-      +'<span style="font-size:.65rem;color:var(--td)">Use o botao Nao previsto para registrar</span></div>';
+    pE.innerHTML='<div class="pc-prod" style="color:var(--tm)">Buscando no catalogo...</div>';
     document.getElementById('btnConfirm').disabled=true;
     document.getElementById('btnNp').style.display='';
-    document.getElementById('npPanel').style.display='flex';
-    document.getElementById('npDesc').focus();
+    // Buscar no catalogo do Firebase
+    buscarNoCatalogo(cod);
     return;
   }
 
@@ -943,7 +988,7 @@ async function confirmarEncerrar(){
     if(cnt===e)ok++;else if(cnt>0)dv++;
   });
   limparEstado();
-  marcarSessaoEncerrada(sid,localSel);  // marcar só este local como encerrado
+  marcarSessaoEncerrada(sid,localSel);  // marcar s? este local como encerrado
   document.getElementById('fimNome').textContent=nome+' -- '+localSel;
   document.getElementById('fimOk').textContent=ok;
   document.getElementById('fimDv').textContent=dv;
@@ -1092,17 +1137,38 @@ function preencherCodigo(cod){
 
 function addHist(o){
   hist.unshift(o);if(hist.length>60)hist.pop();
+  renderHist();
+}
+function renderHist(){
   document.getElementById('histCount').textContent=totB+' lancamentos';
-  document.getElementById('hlist').innerHTML=hist.map(function(h){
+  document.getElementById('hlist').innerHTML=hist.map(function(h,idx){
     var tag='';
     if(h.tag==='nc')tag='<span class="hi-tag tag-nc">NC</span>';
     else if(h.tag==='np')tag='<span class="hi-tag tag-np">NP</span>';
-    return '<div class="hi '+h.cls+'">'+tag
+    return '<div class="hi '+h.cls+'">'
+      +'<button class="hi-del" onclick="excluirLancamento('+idx+')" title="Excluir este lancamento">&#128465;</button>'
+      +tag
       +'<span class="hi-cod">'+h.cod+'</span>'
       +'<span class="hi-prod">'+h.produto+'</span>'
       +'<span class="hi-qty">'+h.qty+'</span>'
       +'<span class="hi-t">'+h.hora+'</span></div>';
   }).join('');
+}
+async function excluirLancamento(idx){
+  var h=hist[idx];
+  if(!h)return;
+  if(!confirm('Excluir o lancamento de "'+h.prod+'" ('+h.cod+')?\nA contagem sera zerada para este item.'))return;
+  var key=h.key||h.cod;
+  // Zerar bipagem no Firebase e na memoria
+  if(bips[key]){
+    delete bips[key];
+    var sp=PATH+'/sessoes/'+sid+'/separadores/'+encN(nome);
+    await fbP(sp+'/bipagens/'+key,null);
+  }
+  // Remover do historico
+  hist.splice(idx,1);
+  totB=Math.max(0,totB-1);
+  rStats();renderLista();renderHist();salvarEstado();
 }
 
 // -- Camera ----------------------------------------------------
