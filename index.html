@@ -980,9 +980,8 @@ async function pausarContagem(){
 async function confirmarEncerrar(){
   if(!confirm('Encerrar sua contagem?'))return;
   fecharCamera();
+  // Marcar APENAS este separador/local como encerrado (nao a sessao inteira)
   await fbPa(PATH+'/sessoes/'+sid+'/separadores/'+encN(nome),{status:'encerrado',fim:new Date().toISOString()});
-  // Marcar a sessao como encerrada no Firebase para o Monitor ver
-  await fbPa(PATH+'/sessoes/'+sid+'/info',{status:'encerrado',fimSeparador:new Date().toISOString()});
   var tot=Object.keys(meuItens).length,ok=0,dv=0;
   Object.keys(bips).forEach(function(k){
     if(!meuItens[k])return;
