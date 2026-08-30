@@ -539,7 +539,12 @@ var sessoesDisp={};
   var restaurado=await tentarRestaurar();
   if(restaurado){abrirScan();return;}
   await carregarSessoes();
-  setInterval(carregarSessoes,10000);
+  setInterval(function(){
+    // Nao atualizar se usuario ja selecionou sessao ou local
+    var sessaoSel=document.getElementById('inSessao').value;
+    var localSel=document.getElementById('inLocal').value;
+    if(!sessaoSel&&!localSel)carregarSessoes();
+  },10000);
 })();
 
 async function carregarSessoes(){
